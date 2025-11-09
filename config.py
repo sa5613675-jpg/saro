@@ -33,19 +33,17 @@ class ProductionConfig(Config):
     """Production configuration"""
     DEBUG = False
     
-    # Use DATABASE_URL from environment, fallback to SQLite
-    database_url = os.environ.get('DATABASE_URL')
+    # MySQL for production
+    MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
+    MYSQL_PORT = os.environ.get('MYSQL_PORT', '3306')
+    MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
+    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', '')
+    MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE', 'smartgardenhub')
     
-    if database_url:
-        # Use the DATABASE_URL from .env (supports both SQLite and MySQL)
-        SQLALCHEMY_DATABASE_URI = database_url
+    if MYSQL_PASSWORD:
+        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
     else:
-        # Fallback to SQLite if no DATABASE_URL is set
-        base_dir = Path(__file__).parent
-        SQLALCHEMY_DATABASE_URI = f"sqlite:///{base_dir}/smartgardenhub.db"
-    
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ECHO = False
+        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{MYSQL_USER}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
 
 config_by_name = {
     'development': DevelopmentConfig,
