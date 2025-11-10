@@ -1,0 +1,310 @@
+<!-- Simple Online Exams - Student Interface -->
+<div x-show="activeSection === 'online-exams'" class="space-y-6">
+    <!-- Header Section -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-900">Online MCQ Exams</h2>
+        <p class="text-gray-600">Take your online exams and view results</p>
+    </div>
+
+    <!-- Available Exams List -->
+    <div x-show="!currentExam" class="bg-white rounded-lg shadow">
+        <div class="p-6">
+            <h3 class="text-xl font-semibold text-gray-900 mb-4">Available Exams</h3>
+            
+            <div x-show="studentExams.length === 0" class="text-center py-12">
+                <i class="fas fa-file-alt text-6xl text-gray-400 mb-4"></i>
+                <p class="text-gray-600">No exams available at the moment</p>
+            </div>
+
+            <div x-show="studentExams.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <template x-for="exam in studentExams" :key="exam.id">
+                    <div class="bg-gray-50 rounded-lg p-6 border border-gray-200 hover:shadow-md transition">
+                        <div class="mb-4">
+                            <h4 class="text-lg font-semibold text-gray-900" x-text="exam.title"></h4>
+                            <div class="mt-2 space-y-1 text-sm text-gray-600">
+                                <p><i class="fas fa-graduation-cap mr-2"></i><span x-text="exam.class_name"></span></p>
+                                <p><i class="fas fa-book mr-2"></i><span x-text="exam.book_name"></span></p>
+                                <p><i class="fas fa-bookmark mr-2"></i><span x-text="exam.chapter_name"></span></p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-2 mb-4 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Duration:</span>
+                                <span class="font-medium" x-text="`${exam.duration_minutes} mins`"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Questions:</span>
+                                <span class="font-medium" x-text="exam.total_questions"></span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Pass Marks:</span>
+                                <span class="font-medium" x-text="`${exam.pass_marks}%`"></span>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="space-y-2">
+                            <button 
+                                x-show="!exam.has_attempted"
+                                x-on:click="startExam(exam.id)" 
+                                class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                            >
+                                <i class="fas fa-play mr-2"></i> Start Exam
+                            </button>
+                            
+                            <button 
+                                x-show="exam.has_attempted && exam.can_retake"
+                                x-on:click="startExam(exam.id)" 
+                                class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                            >
+                                <i class="fas fa-redo mr-2"></i> Retake Exam
+                            </button>
+                            
+                            <button 
+                                x-show="exam.has_attempted"
+                                x-on:click="viewExamResult(exam.id)" 
+                                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded"
+                            >
+                                <i class="fas fa-chart-bar mr-2"></i> View Results
+                            </button>
+
+                            <div x-show="exam.has_attempted && !exam.can_retake" class="text-center py-2">
+                                <span class="text-sm text-gray-600">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Last Score: <span class="font-semibold" x-text="`${exam.last_attempt?.percentage}%`"></span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exam Taking Interface -->
+    <div x-show="currentExam && !showExamResult" class="bg-white rounded-lg shadow">
+        <!-- Exam Header with Timer -->
+        <div class="bg-indigo-600 text-white p-4 rounded-t-lg">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h3 class="text-xl font-bold" x-text="currentExam.title"></h3>
+                    <p class="text-sm opacity-90" x-text="`${currentExam.class_name} - ${currentExam.book_name}`"></p>
+                </div>
+                <div class="text-right">
+                    <div class="text-3xl font-bold" x-text="formatTime(timeRemaining)"></div>
+                    <div class="text-sm opacity-90">Time Remaining</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Question Navigation -->
+        <div class="p-4 border-b bg-gray-50">
+            <div class="flex flex-wrap gap-2">
+                <template x-for="(q, index) in examQuestions" :key="q.id">
+                    <button
+                        x-on:click="currentQuestionIndex = index"
+                        x-bind:class="{
+                            'bg-indigo-600 text-white': currentQuestionIndex === index,
+                            'bg-green-500 text-white': currentQuestionIndex !== index && studentAnswers[q.question_number],
+                            'bg-gray-200 text-gray-700': currentQuestionIndex !== index && !studentAnswers[q.question_number]
+                        }"
+                        class="w-10 h-10 rounded-full font-semibold hover:shadow-md transition"
+                        x-text="index + 1"
+                    ></button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Current Question -->
+        <div class="p-6">
+            <template x-if="examQuestions[currentQuestionIndex]">
+                <div>
+                    <div class="mb-6">
+                        <div class="text-sm text-gray-600 mb-2">
+                            Question <span x-text="currentQuestionIndex + 1"></span> of <span x-text="examQuestions.length"></span>
+                        </div>
+                        <h4 class="text-lg font-semibold text-gray-900 mb-4" x-text="examQuestions[currentQuestionIndex].question_text"></h4>
+                    </div>
+
+                    <div class="space-y-3">
+                        <template x-for="option in ['A', 'B', 'C', 'D']" :key="option">
+                            <label 
+                                class="flex items-start p-4 border-2 rounded-lg cursor-pointer hover:bg-gray-50 transition"
+                                x-bind:class="studentAnswers[examQuestions[currentQuestionIndex].question_number] === option ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200'"
+                            >
+                                <input 
+                                    type="radio" 
+                                    x-bind:name="`question_${examQuestions[currentQuestionIndex].question_number}`"
+                                    x-bind:value="option"
+                                    x-model="studentAnswers[examQuestions[currentQuestionIndex].question_number]"
+                                    x-on:change="saveAnswer(examQuestions[currentQuestionIndex].question_number, option)"
+                                    class="mt-1 mr-3"
+                                >
+                                <div class="flex-1">
+                                    <span class="font-semibold mr-2" x-text="option + '.'"></span>
+                                    <span x-text="examQuestions[currentQuestionIndex]['option_' + option.toLowerCase()]"></span>
+                                </div>
+                            </label>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="p-4 border-t bg-gray-50 flex justify-between">
+            <button 
+                x-on:click="currentQuestionIndex = Math.max(0, currentQuestionIndex - 1)"
+                x-bind:disabled="currentQuestionIndex === 0"
+                class="px-6 py-2 bg-gray-600 text-white rounded disabled:bg-gray-300"
+            >
+                <i class="fas fa-chevron-left mr-2"></i> Previous
+            </button>
+
+            <button 
+                x-show="currentQuestionIndex < examQuestions.length - 1"
+                x-on:click="currentQuestionIndex = Math.min(examQuestions.length - 1, currentQuestionIndex + 1)"
+                class="px-6 py-2 bg-gray-600 text-white rounded"
+            >
+                Next <i class="fas fa-chevron-right ml-2"></i>
+            </button>
+
+            <button 
+                x-show="currentQuestionIndex === examQuestions.length - 1"
+                x-on:click="confirmSubmitExam()"
+                class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-semibold"
+            >
+                <i class="fas fa-check mr-2"></i> Submit Exam
+            </button>
+        </div>
+    </div>
+
+    <!-- Results Display -->
+    <div x-show="showExamResult && examResultData" class="bg-white rounded-lg shadow">
+        <!-- Result Header -->
+        <div class="p-6 border-b">
+            <h3 class="text-2xl font-bold text-gray-900 mb-4">Exam Results</h3>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-blue-50 p-4 rounded-lg">
+                    <div class="text-sm text-gray-600">Score</div>
+                    <div class="text-2xl font-bold text-blue-600">
+                        <span x-text="examResultData.attempt.score"></span> / 
+                        <span x-text="examResultData.exam.total_questions"></span>
+                    </div>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg">
+                    <div class="text-sm text-gray-600">Percentage</div>
+                    <div class="text-2xl font-bold text-purple-600" x-text="`${examResultData.attempt.percentage}%`"></div>
+                </div>
+                <div class="p-4 rounded-lg" x-bind:class="examResultData.attempt.percentage >= examResultData.exam.pass_marks ? 'bg-green-50' : 'bg-red-50'">
+                    <div class="text-sm text-gray-600">Status</div>
+                    <div class="text-2xl font-bold" x-bind:class="examResultData.attempt.percentage >= examResultData.exam.pass_marks ? 'text-green-600' : 'text-red-600'">
+                        <span x-text="examResultData.attempt.percentage >= examResultData.exam.pass_marks ? 'Passed' : 'Failed'"></span>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="text-sm text-gray-600">Time Taken</div>
+                    <div class="text-2xl font-bold text-gray-600" x-text="`${examResultData.attempt.time_taken_minutes} mins`"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Results -->
+        <div class="p-6">
+            <h4 class="text-lg font-semibold text-gray-900 mb-4">Detailed Answers</h4>
+            <div class="space-y-4">
+                <template x-for="(question, index) in examResultData.questions" :key="question.question_number">
+                    <div class="border rounded-lg p-4" x-bind:class="question.is_correct ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="flex-1">
+                                <span class="text-sm font-semibold text-gray-600">Question <span x-text="question.question_number"></span></span>
+                                <p class="text-gray-900 font-medium mt-1" x-text="question.question_text"></p>
+                            </div>
+                            <span 
+                                x-bind:class="question.is_correct ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'"
+                                class="px-3 py-1 rounded-full text-sm font-semibold ml-4"
+                            >
+                                <i x-bind:class="question.is_correct ? 'fas fa-check' : 'fas fa-times'" class="mr-1"></i>
+                                <span x-text="question.is_correct ? 'Correct' : 'Wrong'"></span>
+                            </span>
+                        </div>
+
+                        <div class="space-y-2 mb-3">
+                            <template x-for="opt in ['A', 'B', 'C', 'D']" :key="opt">
+                                <div 
+                                    class="p-3 rounded"
+                                    x-bind:class="{
+                                        'bg-green-200 border-2 border-green-500': question.correct_answer === opt,
+                                        'bg-red-200 border-2 border-red-500': question.student_answer === opt && question.student_answer !== question.correct_answer,
+                                        'bg-white': question.correct_answer !== opt && question.student_answer !== opt
+                                    }"
+                                >
+                                    <span class="font-semibold mr-2" x-text="opt + '.'"></span>
+                                    <span x-text="question['option_' + opt.toLowerCase()]"></span>
+                                    <span x-show="question.correct_answer === opt" class="ml-2 text-green-700 font-semibold">✓ Correct</span>
+                                    <span x-show="question.student_answer === opt && question.student_answer !== question.correct_answer" class="ml-2 text-red-700 font-semibold">✗ Your Answer</span>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div x-show="question.explanation" class="bg-blue-50 p-3 rounded">
+                            <div class="text-sm font-semibold text-blue-900 mb-1">Explanation:</div>
+                            <div class="text-sm text-blue-800" x-text="question.explanation"></div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="p-6 border-t bg-gray-50 flex justify-between">
+            <button 
+                x-on:click="backToExamList()"
+                class="px-6 py-2 bg-gray-600 text-white rounded"
+            >
+                <i class="fas fa-arrow-left mr-2"></i> Back to Exams
+            </button>
+
+            <button 
+                x-show="examResultData.exam.allow_retake"
+                x-on:click="retakeExam()"
+                class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+            >
+                <i class="fas fa-redo mr-2"></i> Retake Exam
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Submit Confirmation Modal -->
+<div x-show="showSubmitConfirmation" 
+     x-cloak
+     class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center"
+     x-on:click.self="showSubmitConfirmation = false">
+    <div class="bg-white rounded-lg shadow-xl p-6 max-w-md mx-4">
+        <div class="text-center">
+            <i class="fas fa-exclamation-triangle text-5xl text-yellow-500 mb-4"></i>
+            <h3 class="text-xl font-bold text-gray-900 mb-2">Submit Exam?</h3>
+            <p class="text-gray-600 mb-4">
+                You have answered <span class="font-semibold" x-text="Object.keys(studentAnswers).length"></span> out of 
+                <span class="font-semibold" x-text="examQuestions.length"></span> questions.
+            </p>
+            <p class="text-gray-600 mb-6">Are you sure you want to submit?</p>
+            <div class="flex gap-3 justify-center">
+                <button 
+                    x-on:click="showSubmitConfirmation = false"
+                    class="px-6 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+                >
+                    Cancel
+                </button>
+                <button 
+                    x-on:click="submitExamFinal()"
+                    class="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                >
+                    Yes, Submit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

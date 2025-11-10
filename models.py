@@ -640,6 +640,141 @@ class Document(db.Model):
             'uploaded_by': self.uploaded_by,
             'uploader_name': self.uploader.full_name if self.uploader else 'Unknown',
             'download_count': self.download_count,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+                        'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+# Online Exam System Models
+
+class OnlineExam(db.Model):
+    """Online MCQ Exam Model"""
+    __tablename__ = 'online_exams'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.id'), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    class_name = db.Column(db.String(100), nullable=False)  # e.g., "Class 9", "HSC"
+    book_name = db.Column(db.String(200), nullable=False)   # e.g., "Higher Math"
+    chapter_name = db.Column(db.String(200), nullable=False) # e.g., "Chapter 1: Algebra"
+    duration_minutes = db.Column(db.Integer, nullable=False) # Exam duration in minutes
+    total_questions = db.Column(db.Integer, nullable=False)  # Total number of questions
+    pass_marks = db.Column(db.Integer, default=40)           # Passing percentage
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    allow_retake = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    batch = db.relationship('Batch', backref='online_exams')
+    creator = db.relationship('User', foreign_keys=[created_by])
+    questions = db.relationship('ExamQuestion', backref='exam', cascade='all, delete-orphan', lazy='dynamic')
+    attempts = db.relationship('StudentExamAttempt', backref='exam', cascade='all, delete-orphan', lazy='dynamic')
+    
+    def __repr__(self):
+        return f'<OnlineExam {self.title} - {self.class_name}>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'batch_id': self.batch_id,
+            'batch_name': self.batch.name if self.batch else None,
+            'title': self.title,
+            'class_name': self.class_name,
+            'book_name': self.book_name,
+            'chapter_name': self.chapter_name,
+            'duration_minutes': self.duration_minutes,
+            'total_questions': self.total_questions,
+            'pass_marks': self.pass_marks,
+            'created_by': self.created_by,
+            'creator_name': f"{self.creator.first_name} {self.creator.last_name}" if self.creator else 'Unknown',
+            'is_active': self.is_active,
+            'allow_retake': self.allow_retake,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class ExamQuestion(db.Model):
+    """Questions for Online Exams"""
+    __tablename__ = 'exam_questions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    exam_id = db.Column(db.Integer, db.ForeignKey('online_exams.id'), nullable=False)
+    question_number = db.Column(db.Integer, nullable=False)  # Order in exam (1, 2, 3...)
+    question_text = db.Column(db.Text, nullable=False)
+    option_a = db.Column(db.Text, nullable=False)
+    option_b = db.Column(db.Text, nullable=False)
+    option_c = db.Column(db.Text, nullable=False)
+    option_d = db.Column(db.Text, nullable=False)
+    correct_answer = db.Column(db.String(1), nullable=False)  # 'A', 'B', 'C', or 'D'
+    explanation = db.Column(db.Text, nullable=True)           # Optional explanation
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<ExamQuestion {self.question_number} for Exam {self.exam_id}>'
+    
+    def to_dict(self, include_answer=False):
+        data = {
+            'id': self.id,
+            'exam_id': self.exam_id,
+            'question_number': self.question_number,
+            'question_text': self.question_text,
+            'option_a': self.option_a,
+            'option_b': self.option_b,
+            'option_c': self.option_c,
+            'option_d': self.option_d
+        }
+        if include_answer:
+            data['correct_answer'] = self.correct_answer
+            data['explanation'] = self.explanation
+        return data
+
+
+class StudentExamAttempt(db.Model):
+    """Student's attempt at an online exam"""
+    __tablename__ = 'student_exam_attempts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    exam_id = db.Column(db.Integer, db.ForeignKey('online_exams.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    attempt_number = db.Column(db.Integer, default=1)         # 1st attempt, 2nd attempt, etc.
+    start_time = db.Column(db.DateTime, default=datetime.utcnow)
+    submit_time = db.Column(db.DateTime, nullable=True)
+    answers = db.Column(db.Text, nullable=True)               # JSON: {1: 'A', 2: 'B', ...}
+    score = db.Column(db.Integer, nullable=True)              # Total correct answers
+    percentage = db.Column(db.Float, nullable=True)
+    status = db.Column(db.String(20), default='in_progress')  # 'in_progress', 'submitted', 'auto_submitted'
+    time_taken_minutes = db.Column(db.Integer, nullable=True)
+    
+    # Relationships
+    student = db.relationship('User', foreign_keys=[student_id])
+    
+    def __repr__(self):
+        return f'<StudentExamAttempt Student:{self.student_id} Exam:{self.exam_id} Attempt:{self.attempt_number}>'
+    
+    def get_answers(self):
+        """Parse JSON answers"""
+        if self.answers:
+            return json.loads(self.answers)
+        return {}
+    
+    def set_answers(self, answers_dict):
+        """Store answers as JSON"""
+        self.answers = json.dumps(answers_dict)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'exam_id': self.exam_id,
+            'student_id': self.student_id,
+            'student_name': f"{self.student.first_name} {self.student.last_name}" if self.student else 'Unknown',
+            'attempt_number': self.attempt_number,
+            'start_time': self.start_time.isoformat() if self.start_time else None,
+            'submit_time': self.submit_time.isoformat() if self.submit_time else None,
+            'score': self.score,
+            'percentage': self.percentage,
+            'status': self.status,
+            'time_taken_minutes': self.time_taken_minutes,
+            'answers': self.get_answers()
         }

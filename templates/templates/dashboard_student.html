@@ -168,15 +168,8 @@
                     </div>
 
                     <!-- Exams Section -->
-                    <div id="examsSection" class="content-section hidden">
-                        <div class="bg-white shadow rounded-lg">
-                            <div class="px-4 py-5 sm:p-6">
-                                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Available Online Exams</h3>
-                                <div id="examsList">
-                                    <!-- Exams list will be loaded here -->
-                                </div>
-                            </div>
-                        </div>
+                    <div id="examsSection" class="content-section hidden" x-data="studentExams()">
+                        {% include 'partials/simple_online_exams_student.html' %}
                     </div>
 
                     <!-- Results Section -->
@@ -607,5 +600,172 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = `/exam/${examId}`;
     };
 });
+
+// Alpine.js component for student exams
+function studentExams() {
+    return {
+        activeSection: 'online-exams',
+        studentExams: [],
+        currentExam: null,
+        examQuestions: [],
+        currentQuestionIndex: 0,
+        studentAnswers: {},
+        timeRemaining: 0,
+        timerInterval: null,
+        showExamResult: false,
+        examResultData: null,
+        showSubmitConfirmation: false,
+        currentAttemptId: null,
+
+        init() {
+            this.loadMyExams();
+        },
+
+        async loadMyExams() {
+            try {
+                const response = await fetch('/api/simple-exams/api/my-exams');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.studentExams = data.exams || [];
+                }
+            } catch (error) {
+                console.error('Failed to load exams:', error);
+            }
+        },
+
+        async startExam(examId) {
+            try {
+                const response = await fetch(`/api/simple-exams/api/exam/${examId}/start`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    this.currentExam = data.exam;
+                    this.examQuestions = data.questions;
+                    this.currentQuestionIndex = 0;
+                    this.studentAnswers = data.existing_answers || {};
+                    this.currentAttemptId = data.attempt_id;
+                    
+                    // Calculate time remaining
+                    const startTime = new Date(data.start_time);
+                    const elapsedSeconds = Math.floor((new Date() - startTime) / 1000);
+                    this.timeRemaining = Math.max(0, (this.currentExam.duration_minutes * 60) - elapsedSeconds);
+                    
+                    this.startTimer();
+                    this.showExamResult = false;
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + (error.error || 'Failed to start exam'));
+                }
+            } catch (error) {
+                console.error('Failed to start exam:', error);
+                alert('Failed to start exam. Please try again.');
+            }
+        },
+
+        startTimer() {
+            if (this.timerInterval) {
+                clearInterval(this.timerInterval);
+            }
+            
+            this.timerInterval = setInterval(() => {
+                this.timeRemaining--;
+                
+                if (this.timeRemaining <= 0) {
+                    clearInterval(this.timerInterval);
+                    this.autoSubmitExam();
+                }
+            }, 1000);
+        },
+
+        formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${minutes}:${secs.toString().padStart(2, '0')}`;
+        },
+
+        async saveAnswer(questionNumber, answer) {
+            try {
+                await fetch(`/api/simple-exams/api/exam/${this.currentExam.id}/save-answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question_number: questionNumber,
+                        answer: answer
+                    })
+                });
+            } catch (error) {
+                console.error('Failed to save answer:', error);
+            }
+        },
+
+        confirmSubmitExam() {
+            this.showSubmitConfirmation = true;
+        },
+
+        async submitExamFinal() {
+            this.showSubmitConfirmation = false;
+            
+            if (this.timerInterval) {
+                clearInterval(this.timerInterval);
+            }
+
+            try {
+                const response = await fetch(`/api/simple-exams/api/exam/${this.currentExam.id}/submit`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(`Exam submitted! Score: ${data.score}/${data.total_questions} (${data.percentage}%)`);
+                    await this.viewExamResult(this.currentExam.id);
+                    this.currentExam = null;
+                } else {
+                    alert('Failed to submit exam');
+                }
+            } catch (error) {
+                console.error('Failed to submit exam:', error);
+                alert('Failed to submit exam. Please try again.');
+            }
+        },
+
+        async autoSubmitExam() {
+            alert('Time is up! Exam will be submitted automatically.');
+            await this.submitExamFinal();
+        },
+
+        async viewExamResult(examId) {
+            try {
+                const response = await fetch(`/api/simple-exams/api/exam/${examId}/result`);
+                if (response.ok) {
+                    const data = await response.json();
+                    this.examResultData = data;
+                    this.showExamResult = true;
+                    this.currentExam = null;
+                } else {
+                    alert('Failed to load results');
+                }
+            } catch (error) {
+                console.error('Failed to load results:', error);
+                alert('Failed to load results. Please try again.');
+            }
+        },
+
+        backToExamList() {
+            this.showExamResult = false;
+            this.examResultData = null;
+            this.currentExam = null;
+            this.loadMyExams();
+        },
+
+        retakeExam() {
+            const examId = this.examResultData.exam.id;
+            this.showExamResult = false;
+            this.examResultData = null;
+            this.startExam(examId);
+        }
+    };
+}
 </script>
 {% endblock %}
