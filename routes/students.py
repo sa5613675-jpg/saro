@@ -132,12 +132,12 @@ def create_student():
                 print(f"ERROR: {error_msg}")
                 return error_response(error_msg, 400)
             
-            # Check if guardian phone already exists
-            existing_user = User.query.filter_by(phoneNumber=phone).first()
-            if existing_user:
-                error_msg = 'User with this guardian phone number already exists'
-                print(f"ERROR: {error_msg} - Phone: {phone}")
-                return error_response(error_msg, 409)
+            # ALLOW MULTIPLE STUDENTS WITH SAME GUARDIAN PHONE
+            # Generate unique phoneNumber for database using guardian phone + timestamp
+            import time
+            unique_suffix = str(int(time.time() * 1000))[-6:]  # Last 6 digits of timestamp
+            phone = f"{phone}{unique_suffix}"  # Make unique for database
+            
         elif student_phone:
             # Fallback to student phone if no guardian phone
             phone = validate_phone(student_phone)

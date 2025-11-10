@@ -1,8 +1,9 @@
-#!/bin/bash#!/bin/bash
-
-## SmartGardenHub VPS Deployment Script
-
-# VPS Deployment Script for SmartGardenHub# Run this on your VPS at /var/www/saroyarsir
+#!/bin/bash
+#
+# VPS Deployment Script for SmartGardenHub
+# Database: /var/www/saroyarsir/smartgardenhub.db
+# Port: 8001
+#
 
 # Database: /var/www/saroyarsir/smartgardenhub.db
 

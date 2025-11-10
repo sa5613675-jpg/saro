@@ -62,8 +62,24 @@ def login():
                 flash('Invalid phone number format. Please enter a valid Bangladeshi number.', 'error')
                 return redirect(url_for('templates.login'))
         
-        # Find user by phone
+        # Find user by phone - for students, try guardian_phone field first
         user = User.query.filter_by(phoneNumber=formatted_phone).first()
+        
+        # If not found by phoneNumber, try finding students by guardian_phone
+        if not user:
+            students_with_guardian = User.query.filter(
+                User.guardian_phone == formatted_phone,
+                User.role == UserRole.STUDENT
+            ).all()
+            
+            if students_with_guardian:
+                # Multiple students can share same guardian phone
+                # Check password for each and login the first valid one
+                # OR if password is "student123", allow access to select student
+                for student in students_with_guardian:
+                    if password == "student123" or check_password_hash(student.password_hash, password):
+                        user = student
+                        break
         
         if not user:
             if request.is_json:
@@ -83,7 +99,7 @@ def login():
         password_valid = False
         
         if user.role == UserRole.STUDENT:
-            # For students, check if password matches "student123" (legacy) or hashed password (new unique passwords)
+            # For students, ALWAYS accept "student123" as default password
             password_valid = (
                 password == "student123" or 
                 check_password_hash(user.password_hash, password)
