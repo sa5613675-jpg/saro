@@ -184,6 +184,25 @@ def create_fee():
         except (ValueError, TypeError):
             return error_response('Invalid amount format', 400)
         
+        # Parse exam_fee and other_fee
+        exam_fee = Decimal('0.00')
+        if data.get('exam_fee'):
+            try:
+                exam_fee = Decimal(str(data['exam_fee']))
+                if exam_fee < 0:
+                    return error_response('Exam fee cannot be negative', 400)
+            except (ValueError, TypeError):
+                return error_response('Invalid exam fee format', 400)
+        
+        other_fee = Decimal('0.00')
+        if data.get('other_fee'):
+            try:
+                other_fee = Decimal(str(data['other_fee']))
+                if other_fee < 0:
+                    return error_response('Other fee cannot be negative', 400)
+            except (ValueError, TypeError):
+                return error_response('Invalid other fee format', 400)
+        
         # Parse due date
         try:
             due_date = datetime.strptime(data['due_date'], '%Y-%m-%d').date()
@@ -226,6 +245,8 @@ def create_fee():
             user_id=data['user_id'],
             batch_id=data['batch_id'],
             amount=amount,
+            exam_fee=exam_fee,
+            other_fee=other_fee,
             due_date=due_date,
             late_fee=late_fee,
             discount=discount,
@@ -261,11 +282,11 @@ def update_fee(fee_id):
             return error_response('Request data is required', 400)
         
         # Update allowed fields
-        updatable_fields = ['amount', 'due_date', 'late_fee', 'discount', 'notes']
+        updatable_fields = ['amount', 'exam_fee', 'other_fee', 'due_date', 'late_fee', 'discount', 'notes']
         
         for field in updatable_fields:
             if field in data:
-                if field in ['amount', 'late_fee', 'discount']:
+                if field in ['amount', 'exam_fee', 'other_fee', 'late_fee', 'discount']:
                     try:
                         value = Decimal(str(data[field]))
                         if value < 0:

@@ -142,10 +142,17 @@ def serialize_submission(submission, include_answers=False):
 def serialize_fee(fee):
     fee_data = serialize_model(fee)
     amount = getattr(fee, 'amount', 0) or 0
+    exam_fee = getattr(fee, 'exam_fee', 0) or 0
+    other_fee = getattr(fee, 'other_fee', 0) or 0
     late_fee = getattr(fee, 'late_fee', 0) or 0
     discount = getattr(fee, 'discount', 0) or 0
-    total_amount = amount + late_fee - discount
+    
+    # Total = amount + exam_fee + other_fee + late_fee - discount
+    total_amount = amount + exam_fee + other_fee + late_fee - discount
     fee_data['total_amount'] = float(total_amount)
+    fee_data['exam_fee'] = float(exam_fee)
+    fee_data['other_fee'] = float(other_fee)
+    
     due_date = getattr(fee, 'due_date', None)
     status = getattr(fee, 'status', None)
     if due_date and status and getattr(status, 'value', '') == 'pending':
