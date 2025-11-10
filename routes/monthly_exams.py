@@ -1696,39 +1696,14 @@ def validate_phone_number(phone):
     return None
 
 def get_sms_template(template_type):
-    """Get SMS template with fallback to default templates"""
-    try:
-        # Try to get custom template from session first
-        from flask import session
-        custom_templates = session.get('custom_templates', {})
-        custom_template = custom_templates.get(template_type)
-        
-        if custom_template:
-            return custom_template
-        
-        # Try to get template from Settings table
-        template_key = f"sms_template_{template_type}"
-        template_setting = Settings.query.filter_by(key=template_key).first()
-        
-        if template_setting and template_setting.value:
-            return template_setting.value.get('message', get_default_template(template_type))
-        
-        # Return default template
-        return get_default_template(template_type)
-        
-    except Exception as e:
-        logger.warning(f"Error getting SMS template: {e}")
-        return get_default_template(template_type)
+    """Get SMS template - uses centralized utility"""
+    from utils.sms_templates import get_sms_template as get_template_util
+    return get_template_util(template_type)
 
 def get_default_template(template_type):
-    """Get default SMS templates"""
-    templates = {
-        'exam_result': "Dear Parent, {student_name} scored {marks}/{total} marks in {subject} exam on {date}. Grade: {grade}",
-        'attendance': "Dear Parent, {student_name} was {status} in class on {date}.",
-        'fee_reminder': "Dear Parent, monthly fee for {student_name} is due. Amount: {amount} BDT. Please pay by {due_date}.",
-        'general': "Dear Parent, this is an update regarding {student_name}."
-    }
-    return templates.get(template_type, templates['general'])
+    """Get default SMS template - uses centralized utility"""
+    from utils.sms_templates import get_default_template as get_default_util
+    return get_default_util(template_type)
 
 def get_target_phone(student):
     """Get the target phone number for SMS (prefer guardian phone)"""

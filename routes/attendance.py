@@ -162,20 +162,17 @@ def bulk_mark_attendance():
             # Import SMS sending function
             from routes.sms import send_sms_via_api
             from models import SmsLog, SmsStatus
+            from utils.sms_templates import get_sms_template
             
             for update in attendance_updates:
                 student = update['student']
                 status = update['status']
                 
-                # Prepare SMS message using templates
-                from flask import session
-                custom_templates = session.get('custom_templates', {})
-                
                 # Get the appropriate template based on attendance status
                 if status.lower() == 'present':
-                    template = custom_templates.get('attendance_present', 'Dear Parent, {student_name} was PRESENT today in {batch_name} on {date}. Keep up the good work!')
+                    template = get_sms_template('attendance_present')
                 else:  # absent
-                    template = custom_templates.get('attendance_absent', 'Dear Parent, {student_name} was ABSENT today in {batch_name} on {date}. Please ensure regular attendance.')
+                    template = get_sms_template('attendance_absent')
                 
                 # Replace template variables with actual data
                 message = template.format(
@@ -338,15 +335,11 @@ def bulk_mark_attendance_send_absent_sms():
             # Import SMS sending function
             from routes.sms import send_sms_via_api
             from models import SmsLog, SmsStatus
+            from utils.sms_templates import get_sms_template
             
             for student in absent_students:
                 # Get absent message template
-                from flask import session
-                custom_templates = session.get('custom_templates', {})
-                template = custom_templates.get(
-                    'attendance_absent', 
-                    'Dear Parent, {student_name} was ABSENT today in {batch_name} on {date}. Please ensure regular attendance.'
-                )
+                template = get_sms_template('attendance_absent')
                 
                 # Replace template variables with actual data
                 message = template.format(

@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify, session
 from models import db, Settings, User
 from utils.auth import login_required, require_role, get_current_user
 from utils.response import success_response, error_response
+from utils.sms_templates import get_sms_template, get_default_template, save_sms_template, get_all_saved_templates
 from datetime import datetime
 import logging
 
@@ -19,58 +20,89 @@ sms_templates_bp = Blueprint('sms_templates', __name__)
 def get_templates():
     """Get all SMS templates"""
     try:
-        # Get templates from database
-        db_templates = Settings.query.filter(
-            Settings.key.like('sms_template_%')
-        ).all()
+        # Get all saved templates from database
+        saved_templates = get_all_saved_templates()
         
-        # Get session templates
-        session_templates = session.get('custom_templates', {})
-        
-        templates = {
-            'exam_result': {
+        # Template definitions
+        template_definitions = [
+            {
+                'id': 'exam_result',
                 'name': 'Exam Result',
+                'category': 'exam',
                 'description': 'Template for exam result notifications',
                 'variables': ['student_name', 'subject', 'marks', 'total', 'grade', 'date'],
-                'default': "Dear Parent, {student_name} scored {marks}/{total} marks in {subject} exam on {date}. Grade: {grade}",
-                'current': session_templates.get('exam_result', ''),
-                'saved': None
+                'default': get_default_template('exam_result')
             },
-            'attendance': {
-                'name': 'Attendance',
-                'description': 'Template for attendance notifications',
-                'variables': ['student_name', 'status', 'date'],
-                'default': "Dear Parent, {student_name} was {status} in class on {date}.",
-                'current': session_templates.get('attendance', ''),
-                'saved': None
+            {
+                'id': 'attendance_present',
+                'name': 'Attendance Present',
+                'category': 'attendance',
+                'description': 'Template for present attendance notifications',
+                'variables': ['student_name', 'batch_name', 'date'],
+                'default': get_default_template('attendance_present')
             },
-            'fee_reminder': {
+            {
+                'id': 'attendance_absent',
+                'name': 'Attendance Absent',
+                'category': 'attendance',
+                'description': 'Template for absent attendance notifications',
+                'variables': ['student_name', 'batch_name', 'date'],
+                'default': get_default_template('attendance_absent')
+            },
+            {
+                'id': 'exam_good',
+                'name': 'Exam Good Performance',
+                'category': 'exam',
+                'description': 'Template for good exam results',
+                'variables': ['student_name', 'subject', 'marks', 'total', 'grade'],
+                'default': get_default_template('exam_result')
+            },
+            {
+                'id': 'exam_poor',
+                'name': 'Exam Needs Improvement',
+                'category': 'exam',
+                'description': 'Template for results needing improvement',
+                'variables': ['student_name', 'subject', 'marks', 'total', 'grade'],
+                'default': get_default_template('exam_result')
+            },
+            {
+                'id': 'fee_reminder',
                 'name': 'Fee Reminder',
+                'category': 'fee',
                 'description': 'Template for fee reminder notifications',
                 'variables': ['student_name', 'amount', 'due_date'],
-                'default': "Dear Parent, monthly fee for {student_name} is due. Amount: {amount} BDT. Please pay by {due_date}.",
-                'current': session_templates.get('fee_reminder', ''),
-                'saved': None
+                'default': get_default_template('fee_reminder')
             }
-        }
+        ]
         
-        # Update with saved templates from database
-        for db_template in db_templates:
-            template_type = db_template.key.replace('sms_template_', '')
-            if template_type in templates:
-                templates[template_type]['saved'] = db_template.value.get('message', '') if db_template.value else ''
+        # Build response with saved or default messages
+        templates = []
+        for template_def in template_definitions:
+            template_id = template_def['id']
+            # Use saved template from database if available, otherwise use default
+            message = saved_templates.get(template_id, template_def['default'])
+            
+            templates.append({
+                'id': template_id,
+                'name': template_def['name'],
+                'category': template_def['category'],
+                'description': template_def['description'],
+                'variables': template_def['variables'],
+                'message': message,
+                'is_saved': template_id in saved_templates
+            })
         
-        return success_response('Templates retrieved successfully', templates)
+        return jsonify(templates), 200
         
     except Exception as e:
         logger.error(f"Error getting SMS templates: {e}")
         return error_response('Failed to retrieve templates', 500)
 
-@sms_templates_bp.route('/<template_type>', methods=['POST'])
+@sms_templates_bp.route('/<template_type>', methods=['POST', 'PUT'])
 @login_required
 @require_role('TEACHER', 'SUPER_USER')
 def update_template(template_type):
-    """Update SMS template (session-based for live editing)"""
+    """Update SMS template and save to database permanently"""
     try:
         data = request.get_json()
         
@@ -81,17 +113,25 @@ def update_template(template_type):
         if not message:
             return error_response('Template message cannot be empty', 400)
         
-        # Store in session for immediate use
-        if 'custom_templates' not in session:
-            session['custom_templates'] = {}
+        current_user = get_current_user()
         
-        session['custom_templates'][template_type] = message
-        session.permanent = True
+        # Save to database permanently (global for all users)
+        # Note: Character limit validation is done on frontend
+        success = save_sms_template(template_type, message, current_user.id)
         
-        return success_response('Template updated successfully', {
-            'template_type': template_type,
-            'message': message
-        })
+        if success:
+            # Clear session template if exists (database takes priority)
+            if 'custom_templates' in session and template_type in session['custom_templates']:
+                del session['custom_templates'][template_type]
+            
+            logger.info(f"Template '{template_type}' saved globally by user {current_user.id}")
+            
+            return success_response('Template saved successfully for all users', {
+                'template_type': template_type,
+                'message': message
+            })
+        else:
+            return error_response('Failed to save template to database', 500)
         
     except Exception as e:
         logger.error(f"Error updating SMS template: {e}")
@@ -113,36 +153,23 @@ def save_template(template_type):
             return error_response('Template message cannot be empty', 400)
         
         current_user = get_current_user()
-        template_key = f"sms_template_{template_type}"
         
-        # Check if template exists
-        template_setting = Settings.query.filter_by(key=template_key).first()
+        # Use centralized utility to save template
+        success = save_sms_template(template_type, message, current_user.id)
         
-        if template_setting:
-            # Update existing template
-            template_setting.value = {'message': message}
-            template_setting.updated_by = current_user.id
-            template_setting.updated_at = datetime.utcnow()
+        if success:
+            # Also clear session template if exists
+            if 'custom_templates' in session and template_type in session['custom_templates']:
+                del session['custom_templates'][template_type]
+            
+            return success_response('Template saved successfully', {
+                'template_type': template_type,
+                'message': message
+            })
         else:
-            # Create new template
-            template_setting = Settings(
-                key=template_key,
-                value={'message': message},
-                description=f"SMS template for {template_type}",
-                category="sms_templates",
-                updated_by=current_user.id
-            )
-            db.session.add(template_setting)
-        
-        db.session.commit()
-        
-        return success_response('Template saved successfully', {
-            'template_type': template_type,
-            'message': message
-        })
+            return error_response('Failed to save template to database', 500)
         
     except Exception as e:
-        db.session.rollback()
         logger.error(f"Error saving SMS template: {e}")
         return error_response('Failed to save template', 500)
 
@@ -157,13 +184,7 @@ def reset_template(template_type):
             del session['custom_templates'][template_type]
         
         # Get default template
-        default_templates = {
-            'exam_result': "Dear Parent, {student_name} scored {marks}/{total} marks in {subject} exam on {date}. Grade: {grade}",
-            'attendance': "Dear Parent, {student_name} was {status} in class on {date}.",
-            'fee_reminder': "Dear Parent, monthly fee for {student_name} is due. Amount: {amount} BDT. Please pay by {due_date}."
-        }
-        
-        default_message = default_templates.get(template_type, "Default template not found")
+        default_message = get_default_template(template_type)
         
         return success_response('Template reset to default', {
             'template_type': template_type,

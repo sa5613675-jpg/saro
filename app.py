@@ -159,6 +159,18 @@ def create_app(config_name=None):
         except Exception as e:
             print(f"Error creating database tables: {str(e)}")
     
+    # Initialize backup scheduler for production
+    if config_name in ['production', 'default']:
+        try:
+            from utils.backup_scheduler import init_backup_scheduler
+            backup_scheduler = init_backup_scheduler(app)
+            if backup_scheduler:
+                print("✅ Automatic database backup scheduler started")
+                print("   - Weekly backup: Every Sunday at 2:00 AM")
+                print("   - Daily backup: Every day at 3:00 AM")
+        except Exception as e:
+            print(f"⚠️  Warning: Backup scheduler not started: {e}")
+    
     return app
 
 if __name__ == '__main__':

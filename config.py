@@ -1,5 +1,5 @@
 """
-Updated Configuration for SQLite Development
+Configuration for SQLite (Development and Production)
 """
 import os
 from pathlib import Path
@@ -18,35 +18,63 @@ class Config:
     # File upload configuration
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
     UPLOAD_FOLDER = 'static/uploads'
+    
+    # SQLite database configuration
+    base_dir = Path(__file__).parent
+    instance_dir = base_dir / 'instance'
+    instance_dir.mkdir(exist_ok=True)
+    
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ECHO = False
+    
+    # Backup configuration
+    BACKUP_DIR = str(base_dir / 'backups')
+    DATABASE_PATH = None  # Will be set in subclasses
 
 class DevelopmentConfig(Config):
     """Development configuration with SQLite"""
     DEBUG = True
     
     # SQLite database for development
-    base_dir = Path(__file__).parent
-    SQLALCHEMY_DATABASE_URI = f"sqlite:///{base_dir}/smartgardenhub.db"
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ECHO = False
+    db_path = Config.instance_dir / 'database.db'
+    SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_path}"
+    DATABASE_PATH = str(db_path)
+    
+    # Enable query logging in development
+    SQLALCHEMY_ECHO = True
 
 class ProductionConfig(Config):
-    """Production configuration"""
+    """Production configuration with SQLite"""
     DEBUG = False
     
-    # MySQL for production
-    MYSQL_HOST = os.environ.get('MYSQL_HOST', 'localhost')
-    MYSQL_PORT = os.environ.get('MYSQL_PORT', '3306')
-    MYSQL_USER = os.environ.get('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.environ.get('MYSQL_PASSWORD', '')
-    MYSQL_DATABASE = os.environ.get('MYSQL_DATABASE', 'smartgardenhub')
+    # SQLite database for production
+    # VPS: /var/www/saroyarsir/smartgardenhub.db
+    # Use environment variable if provided, otherwise use VPS default
+    db_path = os.environ.get('DATABASE_PATH', '/var/www/saroyarsir/smartgardenhub.db')
+    db_path = Path(db_path)
     
-    if MYSQL_PASSWORD:
-        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-    else:
-        SQLALCHEMY_DATABASE_URI = f"mysql+pymysql://{MYSQL_USER}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+    SQLALCHEMY_DATABASE_URI = f"sqlite:///{db_path}"
+    DATABASE_PATH = str(db_path)
+    
+    # Production backup settings
+    BACKUP_DIR = os.environ.get('BACKUP_DIR', '/var/www/saroyarsir/backups')
+    
+    # VPS Port
+    PORT = int(os.environ.get('PORT', 8001))
+    
+    # Enable WAL mode for better concurrency in production
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'connect_args': {
+            'timeout': 30,  # Increase timeout for busy database
+            'check_same_thread': False  # Allow multi-threading
+        },
+        'pool_pre_ping': True,  # Verify connections before using
+        'pool_recycle': 300  # Recycle connections every 5 minutes
+    }
 
 config_by_name = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,
     'default': DevelopmentConfig
 }
+
