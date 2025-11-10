@@ -120,23 +120,37 @@ def create_student():
             return error_response(error_msg, 400)
         
         # Use guardian phone as primary phone if student phone not provided
-        guardian_phone = data.get('guardianPhone', '')
+        guardian_phone_raw = data.get('guardianPhone', '')
         student_phone = data.get('phoneNumber', '')
         
+        # Store the original guardian phone (11 digits) for SMS
+        guardian_phone_for_sms = None
+        
         # Prioritize guardian phone for login
-        if guardian_phone:
+        if guardian_phone_raw:
             # Validate guardian phone number
-            phone = validate_phone(guardian_phone)
-            if not phone:
-                error_msg = f'Invalid guardian phone number format: {guardian_phone}'
+            guardian_phone_validated = validate_phone(guardian_phone_raw)
+            if not guardian_phone_validated:
+                error_msg = f'Invalid guardian phone number format: {guardian_phone_raw}'
                 print(f"ERROR: {error_msg}")
                 return error_response(error_msg, 400)
             
-            # ALLOW MULTIPLE STUDENTS WITH SAME GUARDIAN PHONE
-            # Generate unique phoneNumber for database using guardian phone + timestamp
-            import time
-            unique_suffix = str(int(time.time() * 1000))[-6:]  # Last 6 digits of timestamp
-            phone = f"{phone}{unique_suffix}"  # Make unique for database
+            # Store original 11-digit guardian phone for SMS
+            guardian_phone_for_sms = guardian_phone_validated
+            
+            # Check how many students already use this guardian phone
+            existing_count = User.query.filter(
+                User.guardian_phone == guardian_phone_validated,
+                User.role == UserRole.STUDENT
+            ).count()
+            
+            if existing_count > 0:
+                # Add suffix for unique login: 01700000000 becomes 017000000001, 017000000002, etc.
+                phone = f"{guardian_phone_validated}{existing_count + 1}"
+                print(f"INFO: Multiple students with guardian {guardian_phone_validated}. Login phone: {phone}")
+            else:
+                # First student with this guardian phone
+                phone = guardian_phone_validated
             
         elif student_phone:
             # Fallback to student phone if no guardian phone
@@ -169,25 +183,23 @@ def create_student():
         
         # Create new student
         student = User(
-            phoneNumber=phone,  # This will be guardian phone for login
-            phone=phone,  # Set phone field to same as phoneNumber for SMS
+            phoneNumber=phone,  # Unique login phone (with suffix if duplicate guardian)
+            phone=guardian_phone_for_sms or phone,  # Original 11-digit for SMS
             first_name=data['firstName'].strip(),
             last_name=data['lastName'].strip(),
             email=data.get('email', '').strip() if data.get('email') else None,
             role=UserRole.STUDENT,
             date_of_birth=datetime.strptime(data['dateOfBirth'], '%Y-%m-%d').date() if data.get('dateOfBirth') else None,
             address=data.get('address', '').strip() if data.get('address') else data.get('school', '').strip() if data.get('school') else None,
-            guardian_phone=phone,  # Set guardian phone to same as phoneNumber for SMS
+            guardian_phone=guardian_phone_for_sms or phone,  # Original 11-digit guardian phone for SMS
             guardian_name=data.get('guardianName', '').strip() if data.get('guardianName') else None,
             mother_name=data.get('motherName', '').strip() if data.get('motherName') else None,
             emergency_contact=data.get('emergencyContact', '').strip() if data.get('emergencyContact') else None,
             is_active=data.get('isActive', True)
         )
         
-        # Generate password as last 4 digits of parent phone
-        # Students login with parent phone number + last 4 digits as password
-        unique_password = phone[-4:]  # Last 4 digits of parent phone
-        student.password_hash = generate_password_hash(unique_password)
+        # Password is always "student123" for all students
+        student.password_hash = generate_password_hash("student123")
         
         db.session.add(student)
         db.session.flush()  # Get the student ID
@@ -224,9 +236,10 @@ def create_student():
         
         # Add login credentials to response
         student_data['loginCredentials'] = {
-            'username': phone,  # Parent phone number
-            'password': unique_password,  # Last 4 digits of parent phone
-            'note': 'Student logs in with Parent Phone Number (username) + Last 4 Digits of Parent Phone (password)'
+            'username': phone,  # Login phone (with suffix if duplicate)
+            'password': 'student123',  # Default password for all students
+            'guardianPhone': guardian_phone_for_sms or phone,  # Original 11-digit for SMS
+            'note': f'Login: {phone} / student123 | SMS sent to: {guardian_phone_for_sms or phone}'
         }
         
         return success_response('Student created successfully', student_data, 201)

@@ -49,8 +49,20 @@ echo "✅ Permissions set"
 echo "📦 Step 3: Installing Python dependencies..."
 if [ -f "$APP_DIR/requirements.txt" ]; then
     cd "$APP_DIR"
-    pip3 install -r requirements.txt --user
-    echo "✅ Dependencies installed"
+    
+    # Create virtual environment if it doesn't exist
+    if [ ! -d "venv" ]; then
+        echo "Creating virtual environment..."
+        python3 -m venv venv
+    fi
+    
+    # Activate virtual environment and install dependencies
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    deactivate
+    
+    echo "✅ Dependencies installed in virtual environment"
 else
     echo "⚠️  requirements.txt not found"
 fi
@@ -61,7 +73,8 @@ cd "$APP_DIR"
 export FLASK_ENV=production
 export DATABASE_PATH=$DB_PATH
 
-python3 -c "
+# Use virtual environment python
+venv/bin/python3 << 'EOFPYTHON'
 try:
     from app import create_app
     from models import db
@@ -71,7 +84,11 @@ try:
         print('✅ Database initialized')
 except Exception as e:
     print(f'⚠️  Database init: {e}')
-"
+EOFPYTHON
+
+# Run fee migration
+echo "🔄 Running fee columns migration..."
+venv/bin/python3 migrate_add_fee_columns.py
 
 # Step 5: Create systemd service
 echo "🔧 Step 5: Creating systemd service..."
@@ -90,7 +107,7 @@ Environment="FLASK_ENV=production"
 Environment="DATABASE_PATH=$DB_PATH"
 Environment="BACKUP_DIR=$BACKUP_DIR"
 Environment="PORT=$PORT"
-ExecStart=/usr/bin/python3 -m gunicorn -w 4 -b 0.0.0.0:$PORT --timeout 120 --access-logfile $APP_DIR/logs/access.log --error-logfile $APP_DIR/logs/error.log app:app
+ExecStart=$APP_DIR/venv/bin/python3 -m gunicorn -w 4 -b 0.0.0.0:$PORT --timeout 120 --access-logfile $APP_DIR/logs/access.log --error-logfile $APP_DIR/logs/error.log app:app
 Restart=always
 RestartSec=3
 
@@ -108,7 +125,7 @@ cat > "$APP_DIR/backup_cron.sh" << 'EOFBACKUP'
 cd /var/www/saroyarsir
 export FLASK_ENV=production
 export DATABASE_PATH=/var/www/saroyarsir/smartgardenhub.db
-python3 backup_database.py >> logs/backup_cron.log 2>&1
+/var/www/saroyarsir/venv/bin/python3 backup_database.py >> logs/backup_cron.log 2>&1
 EOFBACKUP
 
 chmod +x "$APP_DIR/backup_cron.sh"
