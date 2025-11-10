@@ -128,7 +128,7 @@ Group=$USER
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-ExecStart=$APP_DIR/venv/bin/python3 -m gunicorn -w 4 -b 0.0.0.0:$PORT --timeout 120 --access-logfile $APP_DIR/logs/access.log --error-logfile $APP_DIR/logs/error.log app:app
+ExecStart=$APP_DIR/venv/bin/python3 -m gunicorn -w 4 -b 0.0.0.0:$PORT --timeout 120 --access-logfile $APP_DIR/logs/access.log --error-logfile $APP_DIR/logs/error.log wsgi:app
 Restart=always
 RestartSec=3
 
