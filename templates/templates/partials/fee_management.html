@@ -146,6 +146,8 @@
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Oct</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Nov</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Dec</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-green-50">Exam Fee</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-yellow-50">Other Fee</th>
                                 <th class="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase bg-blue-50">Total</th>
                             </tr>
                         </thead>
@@ -159,6 +161,14 @@
                                                    class="w-20 px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-blue-500 text-center" placeholder="0" min="0">
                                         </td>
                                     </template>
+                                    <td class="px-2 py-3 text-center bg-green-50">
+                                        <input type="number" :value="getExamFee(student, 1)" @input="updateExamFee(student, 1, $event.target.value)"
+                                               class="w-20 px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-green-500 text-center" placeholder="0" min="0">
+                                    </td>
+                                    <td class="px-2 py-3 text-center bg-yellow-50">
+                                        <input type="number" :value="getOtherFee(student, 1)" @input="updateOtherFee(student, 1, $event.target.value)"
+                                               class="w-20 px-2 py-1 text-sm border rounded focus:ring-2 focus:ring-yellow-500 text-center" placeholder="0" min="0">
+                                    </td>
                                     <td class="px-4 py-3 text-center text-sm font-semibold bg-blue-50" x-text="calculateTotal(student)"></td>
                                 </tr>
                             </template>
@@ -343,6 +353,8 @@ function feeManager() {
                                     month: month,
                                     year: this.selectedYear,
                                     amount: monthData.amount || 0,
+                                    exam_fee: monthData.exam_fee || 0,
+                                    other_fee: monthData.other_fee || 0,
                                     fee_id: monthData.fee_id,
                                     status: monthData.status,
                                     isDirty: false
@@ -363,6 +375,16 @@ function feeManager() {
             return this.fees[key]?.amount || '';
         },
         
+        getExamFee(student, month) {
+            const key = `${student.student_id || student.id}_${month}`;
+            return this.fees[key]?.exam_fee || '';
+        },
+        
+        getOtherFee(student, month) {
+            const key = `${student.student_id || student.id}_${month}`;
+            return this.fees[key]?.other_fee || '';
+        },
+        
         updateFee(student, month, value) {
             const key = `${student.student_id || student.id}_${month}`;
             if (!this.fees[key]) {
@@ -371,10 +393,46 @@ function feeManager() {
                     month: month,
                     year: this.selectedYear,
                     amount: 0,
+                    exam_fee: 0,
+                    other_fee: 0,
                     isDirty: true
                 };
             }
             this.fees[key].amount = parseFloat(value) || 0;
+            this.fees[key].isDirty = true;
+        },
+        
+        updateExamFee(student, month, value) {
+            const key = `${student.student_id || student.id}_${month}`;
+            if (!this.fees[key]) {
+                this.fees[key] = {
+                    student_id: student.student_id || student.id,
+                    month: month,
+                    year: this.selectedYear,
+                    amount: 0,
+                    exam_fee: 0,
+                    other_fee: 0,
+                    isDirty: true
+                };
+            }
+            this.fees[key].exam_fee = parseFloat(value) || 0;
+            this.fees[key].isDirty = true;
+        },
+        
+        updateOtherFee(student, month, value) {
+            const key = `${student.student_id || student.id}_${month}`;
+            if (!this.fees[key]) {
+                this.fees[key] = {
+                    student_id: student.student_id || student.id,
+                    month: month,
+                    year: this.selectedYear,
+                    amount: 0,
+                    exam_fee: 0,
+                    other_fee: 0,
+                    isDirty: true
+                };
+            }
+            this.fees[key].other_fee = parseFloat(value) || 0;
             this.fees[key].isDirty = true;
         },
         
@@ -385,6 +443,10 @@ function feeManager() {
                 const key = `${studentId}_${m}`;
                 total += this.fees[key]?.amount || 0;
             }
+            // Add exam_fee and other_fee from January (month 1) as they are annual fees
+            const jan_key = `${studentId}_1`;
+            total += this.fees[jan_key]?.exam_fee || 0;
+            total += this.fees[jan_key]?.other_fee || 0;
             return total.toFixed(2);
         },
         
@@ -411,7 +473,9 @@ function feeManager() {
                         batch_id: this.selectedBatch,
                         month: fee.month,
                         year: fee.year,
-                        amount: fee.amount
+                        amount: fee.amount,
+                        exam_fee: fee.exam_fee || 0,
+                        other_fee: fee.other_fee || 0
                     };
                     
                     console.log('Saving fee:', payload);
@@ -479,7 +543,7 @@ function feeManager() {
                 }
 
                 // Prepare CSV data
-                const headers = ['Student Name', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Total'];
+                const headers = ['Student Name', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Exam Fee', 'Other Fee', 'Total'];
                 const csvRows = [headers.join(',')];
 
                 // Add student data rows
@@ -490,6 +554,8 @@ function feeManager() {
                             const month = i + 1;
                             return this.getFee(student, month) || '0';
                         }),
+                        this.getExamFee(student, 1) || '0',
+                        this.getOtherFee(student, 1) || '0',
                         this.calculateTotal(student)
                     ];
                     csvRows.push(row.join(','));
