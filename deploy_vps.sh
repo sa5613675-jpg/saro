@@ -67,11 +67,35 @@ else
     echo "⚠️  requirements.txt not found"
 fi
 
-# Step 4: Initialize database
-echo "🗄️  Step 4: Initializing database..."
+# Step 4: Create .env file with production settings
+echo "⚙️  Step 4: Creating .env file..."
+cat > "$APP_DIR/.env" << EOF
+# Production Environment Configuration
+FLASK_ENV=production
+DEBUG=False
+
+# Database Configuration
+DATABASE_PATH=$DB_PATH
+BACKUP_DIR=$BACKUP_DIR
+
+# Server Configuration
+PORT=$PORT
+HOST=0.0.0.0
+
+# Security
+SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+
+# SMS Configuration
+SMS_API_KEY=gsOKLO6XtKsANCvgPHNt
+SMS_SENDER_ID=8809617628909
+EOF
+
+chmod 600 "$APP_DIR/.env"
+echo "✅ .env file created"
+
+# Step 5: Initialize database
+echo "🗄️  Step 5: Initializing database..."
 cd "$APP_DIR"
-export FLASK_ENV=production
-export DATABASE_PATH=$DB_PATH
 
 # Use virtual environment python
 venv/bin/python3 << 'EOFPYTHON'
@@ -90,8 +114,8 @@ EOFPYTHON
 echo "🔄 Running fee columns migration..."
 venv/bin/python3 migrate_add_fee_columns.py
 
-# Step 5: Create systemd service
-echo "🔧 Step 5: Creating systemd service..."
+# Step 6: Create systemd service
+echo "🔧 Step 6: Creating systemd service..."
 sudo tee /etc/systemd/system/$APP_NAME.service > /dev/null << EOF
 [Unit]
 Description=SmartGardenHub Flask Application
@@ -102,11 +126,8 @@ Type=exec
 User=$USER
 Group=$USER
 WorkingDirectory=$APP_DIR
+EnvironmentFile=$APP_DIR/.env
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-Environment="FLASK_ENV=production"
-Environment="DATABASE_PATH=$DB_PATH"
-Environment="BACKUP_DIR=$BACKUP_DIR"
-Environment="PORT=$PORT"
 ExecStart=$APP_DIR/venv/bin/python3 -m gunicorn -w 4 -b 0.0.0.0:$PORT --timeout 120 --access-logfile $APP_DIR/logs/access.log --error-logfile $APP_DIR/logs/error.log app:app
 Restart=always
 RestartSec=3
@@ -118,8 +139,8 @@ EOF
 sudo systemctl daemon-reload
 echo "✅ Systemd service created"
 
-# Step 6: Setup automatic backups
-echo "⏰ Step 6: Setting up automatic backups..."
+# Step 7: Setup automatic backups
+echo "⏰ Step 7: Setting up automatic backups..."
 cat > "$APP_DIR/backup_cron.sh" << 'EOFBACKUP'
 #!/bin/bash
 cd /var/www/saroyarsir
@@ -135,8 +156,8 @@ CRON_JOB="0 2 * * 0 cd $APP_DIR && ./backup_cron.sh"
 (crontab -l 2>/dev/null | grep -v "backup_cron.sh"; echo "$CRON_JOB") | crontab -
 echo "✅ Automatic backups configured"
 
-# Step 7: Start the application
-echo "🚀 Step 7: Starting application..."
+# Step 8: Start the application
+echo "🚀 Step 8: Starting application..."
 sudo systemctl enable $APP_NAME
 sudo systemctl restart $APP_NAME
 sleep 3

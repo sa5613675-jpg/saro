@@ -7,6 +7,13 @@ from flask_cors import CORS
 from flask_bcrypt import Bcrypt
 from flask_session import Session
 import os
+from pathlib import Path
+
+# Load environment variables from .env file if it exists
+from dotenv import load_dotenv
+env_path = Path(__file__).parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path)
 
 # Import extensions
 from models import db
