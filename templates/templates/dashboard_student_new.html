@@ -8,9 +8,10 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="studentDashboard()" class="flex h-screen bg-gray-50">
+<div x-data="studentDashboard()" class="flex h-screen bg-gray-50 overflow-hidden">
     <!-- Sidebar -->
-    <div class="w-64 bg-white shadow-lg border-r border-gray-200" :class="{ '-translate-x-full': !sidebarOpen }" 
+    <div class="fixed md:relative w-64 bg-white shadow-lg border-r border-gray-200 h-full z-40 md:translate-x-0" 
+         :class="{ '-translate-x-full': !sidebarOpen }"
          x-transition:enter="transition ease-out duration-300"
          x-transition:enter-start="-translate-x-full"
          x-transition:enter-end="translate-x-0"
@@ -36,7 +37,7 @@
             <div class="px-3 space-y-1">
                 <template x-for="item in menuItems" :key="item.id">
                     <button 
-                        @click="activeSection = item.id"
+                        @click="activeSection = item.id; sidebarOpen = false"
                         :class="{
                             'bg-green-50 border-r-2 border-green-500 text-green-700': activeSection === item.id,
                             'text-gray-600 hover:bg-gray-50 hover:text-gray-900': activeSection !== item.id
@@ -49,6 +50,9 @@
             </div>
         </nav>
     </div>
+
+    <!-- Overlay for mobile -->
+    <div x-show="sidebarOpen" @click="sidebarOpen = false" class="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden" x-transition:enter="transition-opacity ease-linear duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition-opacity ease-linear duration-300" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"></div>
 
     <!-- Main Content -->
     <div class="flex-1 flex flex-col overflow-hidden">
@@ -192,11 +196,6 @@
                 {% include 'partials/student_monthly_exams.html' %}
             </div>
 
-            <!-- AI Solver -->
-            <div x-show="activeSection === 'ai-solver'" x-transition>
-                {% include 'partials/ai_solver.html' %}
-            </div>
-
             <!-- Online Exams -->
             <div x-show="activeSection === 'online-exam'" x-transition>
                 {% include 'partials/online_exam_list.html' %}
@@ -220,7 +219,6 @@ function studentDashboard() {
             { id: 'dashboard', title: 'Dashboard', icon: 'fas fa-tachometer-alt' },
             { id: 'results', title: 'Results', icon: 'fas fa-chart-bar' },
             { id: 'monthlyExams', title: 'Monthly Exams', icon: 'fas fa-calendar-alt' },
-            { id: 'ai-solver', title: 'AI Solver', icon: 'fas fa-brain' },
             { id: 'online-exam', title: 'Online Exams', icon: 'fas fa-laptop' }
         ],
 
