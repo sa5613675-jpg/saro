@@ -1,5 +1,5 @@
 <!-- Simple Online Exams - Student Interface -->
-<div x-show="activeSection === 'online-exams'" class="space-y-6">
+<div class="space-y-6">
     <!-- Header Section -->
     <div>
         <h2 class="text-2xl font-bold text-gray-900">Online MCQ Exams</h2>
@@ -7,7 +7,7 @@
     </div>
 
     <!-- Available Exams List -->
-    <div x-show="!currentExam" class="bg-white rounded-lg shadow">
+    <div x-show="!currentExam && !showExamResult" class="bg-white rounded-lg shadow">
         <div class="p-6">
             <h3 class="text-xl font-semibold text-gray-900 mb-4">Available Exams</h3>
             

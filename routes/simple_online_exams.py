@@ -253,7 +253,7 @@ def start_exam(exam_id):
     
     # If in progress, resume
     if last_attempt and last_attempt.status == 'in_progress':
-        questions = [q.to_dict(include_answer=False) for q in exam.questions]
+        questions = [q.to_dict(include_answer=False) for q in sorted(exam.questions, key=lambda x: x.question_number)]
         return jsonify({
             'message': 'Resuming exam',
             'attempt_id': last_attempt.id,
@@ -280,8 +280,8 @@ def start_exam(exam_id):
     db.session.add(attempt)
     db.session.commit()
     
-    # Return exam with questions (without answers)
-    questions = [q.to_dict(include_answer=False) for q in exam.questions]
+    # Return exam with questions (without answers) - sorted by question number
+    questions = [q.to_dict(include_answer=False) for q in sorted(exam.questions, key=lambda x: x.question_number)]
     
     return jsonify({
         'message': 'Exam started',
@@ -406,7 +406,7 @@ def get_result(exam_id):
     
     # Build detailed results
     question_results = []
-    for question in exam.questions:
+    for question in sorted(exam.questions, key=lambda x: x.question_number):
         student_answer = student_answers.get(str(question.question_number), '').upper()
         is_correct = student_answer == question.correct_answer
         
